@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Import and Manage Equipment Details</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f7f6;
+      color: #333;
+    }
+    h1 {
+      color: #4CAF50;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 10px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    #importStatus, #clearStatus {
+      margin-top: 20px;
+      font-size: 16px;
+    }
+    input[type="file"], input[type="date"] {
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Import and Manage Equipment Details</h1>
+
+    <!-- Date Input for Import -->
+    <h2>Import Equipment Data</h2>
+    <label for="importDate">Enter Date:</label>
+    <input type="date" id="importDate" required>
+    <br>
+    <input type="file" id="csvFile" accept=".csv">
+    <br>
+    <button id="importButton">Import CSV</button>
+    <p id="importStatus"></p>
+
+    <!-- Date Range for Clear -->
+    <h2>Clear Equipment Data</h2>
+    <label for="clearStartDate">Start Date:</label>
+    <input type="date" id="clearStartDate" required>
+    <label for="clearEndDate">End Date:</label>
+    <input type="date" id="clearEndDate" required>
+    <br>
+    <button id="clearRangeButton" style="background-color: red;">Clear Data in Range</button>
+    <p id="clearStatus"></p>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+    import { getFirestore, collection, getDocs, deleteDoc, doc, getDoc, updateDoc, setDoc, arrayUnion, query, where } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAXZgxM6PU-T3D2811KnBszblRWju7rv1Y",
+      authDomain: "dws-management.firebaseapp.com",
+      projectId: "dws-management",
+      storageBucket: "dws-management.firebasestorage.app",
+      messagingSenderId: "23827231923",
+      appId: "1:23827231923:web:97141b6d19c7cd109d2cc6",
+      measurementId: "G-L14GLJDYW7"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const csvFileInput = document.getElementById("csvFile");
+    const importDateInput = document.getElementById("importDate");
+    const importButton = document.getElementById("importButton");
+    const clearStartDateInput = document.getElementById("clearStartDate");
+    const clearEndDateInput = document.getElementById("clearEndDate");
+    const clearRangeButton = document.getElementById("clearRangeButton");
+    const importStatus = document.getElementById("importStatus");
+    const clearStatus = document.getElementById("clearStatus");
+
+    // Debug Helper
+    function logError(message, error) {
+      console.error(message, error);
+      alert(`Error: ${message}\nCheck the console for details.`);
+    }
+
+    // Import CSV data into the EquipmentsDaily collection
+    importButton.addEventListener("click", async () => {
+      const file = csvFileInput.files[0];
+      const importDate = importDateInput.value;
+
+      if (!file || !importDate) {
+        alert("Please select a CSV file and enter a date!");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async function (e) {
+        try {
+          const csvData = e.target.result.split("\n").map(row => row.split(","));
+          const headerRow = csvData.shift(); // Remove the header row
+          if (headerRow.length < 9) {
+            alert("Invalid CSV format! Ensure proper headers.");
+            return;
+          }
+
+          let successCount = 0;
+          const equipmentArray = [];
+
+          for (const row of csvData) {
+            const [
+              plantNo = "",
+              regNo = "",
+              equipmentDetails = "",
+              owner = "",
+              location = "",
+              workingHours = "",
+              idle = "",
+              ur = "",
+              remarks = ""
+            ] = row.map(value => value.trim() || "");
+
+            if (regNo) {
+              equipmentArray.push({
+                regNo,
+                plantNo,
+                equipmentDetails,
+                owner,
+                location,
+                workingHours: workingHours ? parseFloat(workingHours) : "",
+                idle: idle ? parseFloat(idle) : "",
+                ur,
+                remarks
+              });
+              successCount++;
+            } else {
+              console.log("Skipped row due to missing Reg. No.:", row);
+            }
+          }
+
+          const docRef = doc(db, "EquipmentsDaily", importDate);
+          const docSnap = await getDoc(docRef);
+
+          if (docSnap.exists()) {
+            await updateDoc(docRef, { equipmentDetails: arrayUnion(...equipmentArray) });
+          } else {
+            await setDoc(docRef, { equipmentDetails: equipmentArray });
+          }
+
+          importStatus.style.color = "green";
+          importStatus.innerText = `Import Completed: ${successCount} entries added for ${importDate}.`;
+        } catch (error) {
+          logError("Failed to import data.", error);
+        }
+      };
+
+      reader.onerror = () => {
+        alert("Error reading the CSV file. Please try again.");
+      };
+
+      reader.readAsText(file);
+    });
+
+    // Clear data in the given date range
+    clearRangeButton.addEventListener("click", async () => {
+      const startDate = clearStartDateInput.value;
+      const endDate = clearEndDateInput.value;
+
+      if (!startDate || !endDate) {
+        alert("Please enter both Start Date and End Date!");
+        return;
+      }
+
+      try {
+        const collectionRef = collection(db, "EquipmentsDaily");
+        const q = query(collectionRef, where("__name__", ">=", startDate), where("__name__", "<=", endDate));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+          clearStatus.style.color = "red";
+          clearStatus.innerText = `No data found in the range ${startDate} to ${endDate}.`;
+          return;
+        }
+
+        let deleteCount = 0;
+
+        for (const docSnap of querySnapshot.docs) {
+          await deleteDoc(docSnap.ref);
+          deleteCount++;
+        }
+
+        clearStatus.style.color = "green";
+        clearStatus.innerText = `Successfully cleared ${deleteCount} entries between ${startDate} and ${endDate}.`;
+      } catch (error) {
+        logError("Failed to clear data in the specified range.", error);
+      }
+    });
+  </script>
+</body>
+</html>
