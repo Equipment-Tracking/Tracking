@@ -1,1 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Equipment Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f7f6;
+      color: #333;
+    }
+    h1 {
+      color: #4CAF50;
+      text-align: center;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .metrics {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 20px;
+    }
+    .metric {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+      text-align: center;
+      flex: 1;
+      margin: 10px;
+    }
+    canvas {
+      margin-top: 20px;
+    }
+    table {
+      margin: 20px auto;
+      border-collapse: collapse;
+      width: 100%;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Equipment Management Dashboard</h1>
+  <div class="container">
+    <!-- Metrics Section -->
+    <div class="metrics">
+      <div class="metric">
+        <h2 id="dailyUpdates">0</h2>
+        <p>Equipment Updated Today</p>
+      </div>
+      <div class="metric">
+        <h2 id="totalDays">0</h2>
+        <p>Total Days Updated</p>
+      </div>
+      <div class="metric">
+        <h2 id="totalEquipment">0</h2>
+        <p>Total Equipment Records</p>
+      </div>
+    </div>
 
+    <!-- Chart Section -->
+    <canvas id="updatesChart" width="400" height="200"></canvas>
+
+    <!-- Table Section -->
+    <h2>Recent Updates</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Reg No</th>
+          <th>Plant No</th>
+          <th>Location</th>
+          <th>Working Hours</th>
+        </tr>
+      </thead>
+      <tbody id="recentUpdatesTable">
+        <!-- Data will be populated dynamically -->
+      </tbody>
+    </table>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+    import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAXZgxM6PU-T3D2811KnBszblRWju7rv1Y",
+      authDomain: "dws-management.firebaseapp.com",
+      projectId: "dws-management",
+      storageBucket: "dws-management.firebasestorage.app",
+      messagingSenderId: "23827231923",
+      appId: "1:23827231923:web:97141b6d19c7cd109d2cc6",
+      measurementId: "G-L14GLJDYW7"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const dailyUpdatesElem = document.getElementById("dailyUpdates");
+    const totalDaysElem = document.getElementById("totalDays");
+    const totalEquipmentElem = document.getElementById("totalEquipment");
+    const recentUpdatesTable = document.getElementById("recentUpdatesTable");
+
+    let updatesChart;
+
+    async function loadDashboardData() {
+      try {
+        const collectionRef = collection(db, "EquipmentsDaily");
+        const snapshot = await getDocs(collectionRef);
+
+        const dataByDate = {};
+        let totalEquipment = 0;
+        const recentUpdates = [];
+
+        snapshot.forEach(docSnap => {
+          const date = docSnap.id;
+          const equipmentDetails = docSnap.data().equipmentDetails || [];
+          totalEquipment += equipmentDetails.length;
+
+          // Aggregate data for chart
+          dataByDate[date] = (dataByDate[date] || 0) + equipmentDetails.length;
+
+          // Add to recent updates
+          equipmentDetails.forEach(equipment => {
+            recentUpdates.push({ date, ...equipment });
+          });
+        });
+
+        // Update metrics
+        const today = new Date().toISOString().split("T")[0];
+        dailyUpdatesElem.textContent = dataByDate[today] || 0;
+        totalDaysElem.textContent = Object.keys(dataByDate).length;
+        totalEquipmentElem.textContent = totalEquipment;
+
+        // Populate recent updates table
+        populateRecentUpdates(recentUpdates.slice(-10)); // Show last 10 updates
+
+        // Create chart
+        createChart(dataByDate);
+      } catch (error) {
+        console.error("Error loading dashboard data:", error);
+      }
+    }
+
+    function populateRecentUpdates(updates) {
+      recentUpdatesTable.innerHTML = updates.map(update => `
+        <tr>
+          <td>${update.date}</td>
+          <td>${update.regNo}</td>
+          <td>${update.plantNo}</td>
+          <td>${update.location}</td>
+          <td>${update.workingHours || "N/A"}</td>
+        </tr>
+      `).join("");
+    }
+
+    function createChart(dataByDate) {
+      const labels = Object.keys(dataByDate).sort(); // Sort dates
+      const data = labels.map(date => dataByDate[date]);
+
+      if (updatesChart) updatesChart.destroy(); // Destroy previous chart if exists
+
+      const ctx = document.getElementById("updatesChart").getContext("2d");
+      updatesChart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{
+            label: "Equipment Updates Per Day",
+            data,
+            backgroundColor: "rgba(75, 192, 192, 0.2)",
+            borderColor: "rgba(75, 192, 192, 1)",
+            borderWidth: 1
+          }]
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    // Load dashboard data
+    loadDashboardData();
+  </script>
+</body>
+</html>
