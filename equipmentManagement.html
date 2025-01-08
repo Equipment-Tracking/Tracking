@@ -1,1 +1,188 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Equipment Verification</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f7f6;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .form-section {
+      margin-bottom: 20px;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      background-color: #fff;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 8px;
+    }
+    input, select, textarea, button {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    button {
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .read-only {
+      background-color: #f9f9f9;
+      color: #555;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Equipment Verification</h1>
+
+  <!-- Enter Verification Code Section -->
+  <div class="form-section" id="verificationSection">
+    <h3>Enter Verification Code</h3>
+    <label for="verificationCodeInput">Enter Code</label>
+    <input type="text" id="verificationCodeInput" placeholder="Enter the verification code" />
+    <button id="verifyButton">Verify</button>
+  </div>
+
+  <!-- Equipment Details and Actions -->
+  <div class="form-section hidden" id="equipmentDetailsSection">
+    <h3>Equipment Details</h3>
+    <label for="plantNo">Plant No.</label>
+    <input type="text" id="plantNo" class="read-only" readonly />
+
+    <label for="equipmentNo">Equipment No.</label>
+    <input type="text" id="equipmentNo" class="read-only" readonly />
+
+    <label for="equipmentDetails">Equipment Details</label>
+    <input type="text" id="equipmentDetails" class="read-only" readonly />
+
+    <h3>Action</h3>
+    <label for="action">Select Action</label>
+    <select id="action">
+      <option value="breakdown">Breakdown</option>
+      <option value="stickerExpired">Sticker Expired</option>
+      <option value="sendToPMV">Send to PMV</option>
+    </select>
+
+    <label for="location">Location</label>
+    <input type="text" id="location" placeholder="Enter location" />
+
+    <label for="remarks">Remarks</label>
+    <textarea id="remarks" placeholder="Enter remarks"></textarea>
+
+    <button id="saveButton">Save</button>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+    apiKey: "AIzaSyAXZgxM6PU-T3D2811KnBszblRWju7rv1Y",
+    authDomain: "dws-management.firebaseapp.com",
+    projectId: "dws-management",
+    storageBucket: "dws-management.firebasestorage.app",
+    messagingSenderId: "23827231923",
+    appId: "1:23827231923:web:97141b6d19c7cd109d2cc6",
+    measurementId: "G-L14GLJDYW7"
+  };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const verificationSection = document.getElementById("verificationSection");
+    const equipmentDetailsSection = document.getElementById("equipmentDetailsSection");
+    const verificationCodeInput = document.getElementById("verificationCodeInput");
+    const verifyButton = document.getElementById("verifyButton");
+    const saveButton = document.getElementById("saveButton");
+
+    const plantNoField = document.getElementById("plantNo");
+    const equipmentNoField = document.getElementById("equipmentNo");
+    const equipmentDetailsField = document.getElementById("equipmentDetails");
+    const actionField = document.getElementById("action");
+    const locationField = document.getElementById("location");
+    const remarksField = document.getElementById("remarks");
+
+    // Verification logic
+    verifyButton.addEventListener("click", async () => {
+      const code = verificationCodeInput.value.trim();
+      if (!code) {
+        alert("Please enter a verification code.");
+        return;
+      }
+
+      try {
+        const docRef = doc(db, "Equipment", code); // Using the code as the document ID
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          plantNoField.value = data.plantNo || "N/A";
+          equipmentNoField.value = data.equipmentNo || "N/A";
+          equipmentDetailsField.value = data.equipmentDetails || "N/A";
+
+          verificationSection.classList.add("hidden");
+          equipmentDetailsSection.classList.remove("hidden");
+        } else {
+          alert("Invalid code. Please try again.");
+        }
+      } catch (error) {
+        console.error("Error verifying code:", error);
+        alert("Failed to verify code. Please try again.");
+      }
+    });
+
+    // Save details logic
+    saveButton.addEventListener("click", async () => {
+      const action = actionField.value;
+      const location = locationField.value.trim();
+      const remarks = remarksField.value.trim();
+
+      if (!action || !location) {
+        alert("Please fill in all required fields.");
+        return;
+      }
+
+      try {
+        const data = {
+          plantNo: plantNoField.value,
+          equipmentNo: equipmentNoField.value,
+          equipmentDetails: equipmentDetailsField.value,
+          action,
+          location,
+          remarks,
+          timestamp: serverTimestamp()
+        };
+
+        await addDoc(collection(db, "EquipmentLogs"), data);
+
+        alert("Details saved successfully!");
+        location.reload();
+      } catch (error) {
+        console.error("Error saving details:", error);
+        alert("Failed to save details. Please try again.");
+      }
+    });
+  </script>
+</body>
+</html>
