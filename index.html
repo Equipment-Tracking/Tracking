@@ -48,16 +48,18 @@
     try {
         // Fetch data from Azure Function
         const response = await fetch(`https://functiontdemo.azurewebsites.net/api/getdata?number=${number}`);
-        const rawResponse = await response.text(); // Get raw response as text
+        const rawResponse = await response.text(); // Get the raw response as text
 
-        // Display raw response for debugging
+        console.log("Raw Response:", rawResponse); // Log the raw response
         resultElement.textContent = `Raw Response: ${rawResponse}`;
 
-        if (response.ok) {
+        // Try parsing the response as JSON
+        try {
             const data = JSON.parse(rawResponse);
             resultElement.textContent = `Response: ${data.message}`;
-        } else {
-            resultElement.textContent += `\nError: ${rawResponse}`;
+        } catch (jsonError) {
+            console.error("JSON Parse Error:", jsonError);
+            resultElement.textContent = `Error: JSON Parse Error: ${jsonError.message}`;
             resultElement.className = "error";
         }
     } catch (error) {
